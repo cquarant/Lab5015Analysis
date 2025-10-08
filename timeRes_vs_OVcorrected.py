@@ -1,12 +1,15 @@
 import ROOT
 import sys
+from collections import OrderedDict
 
+gStyle = ROOT.gStyle
+gStyle.SetOptStat(0)
 
 # List of ROOT files to process
 # You can also pass them as arguments: python average_graph_y.py file1.root file2.root ...
 file_dict = [
     { 
-        "DM" : "FE4587",
+        "DM" : "PKU_Class_AA",
         "file_list": ["/home/cmsdaq/TBAnalysis/TB_CERN_Sept2025/Lab5015Analysis/plots/summaryPlots_ith1_scan_FE4587_run4269.root",
                       "/home/cmsdaq/TBAnalysis/TB_CERN_Sept2025/Lab5015Analysis/plots/summaryPlots_ith1_scan_FE4587_run4272.root",
                       "/home/cmsdaq/TBAnalysis/TB_CERN_Sept2025/Lab5015Analysis/plots/summaryPlots_analysis_std_run4278.root",
@@ -31,7 +34,7 @@ file_dict = [
 
 setVbd = 38.11
 tRes_vs_OV_dict = {}
-tGraphs = {}
+tGraphs = OrderedDict()
 for d in file_dict:
 
     tRes_vs_OV_dict[d['DM']] = {'tRes':[], 'ovs':[]}
@@ -78,14 +81,23 @@ c.cd()
 
 #Dummy histogram for axes
 h_dummy = ROOT.TH2F("h_dummy", "", 10, 0, 3.5, 10, 0, 100)
+h_dummy.GetXaxis().SetTitle("Overvoltage [V]")
+h_dummy.GetYaxis().SetTitle("Time resolution [ps]")
 h_dummy.Draw()
+
+#Legend
+legend = ROOT.TLegend(0.6, 0.7, 0.89, 0.89)
+legend.SetBorderSize(0)
+legend.SetFillStyle(0)
 
 for i, gr in enumerate(tGraphs.keys()):
     tGraphs[gr].SetMarkerStyle(file_dict[i]['marker'])
     tGraphs[gr].SetMarkerColor(file_dict[i]['color'])
 
     tGraphs[gr].Draw("P SAME")
+    legend.AddEntry(tGraphs[gr], file_dict[i]['DM'], "p")
 
+legend.Draw()
 c.Update()
 c.SaveAs("timeRes_vs_OVcorrected.png")
 c.SaveAs("timeRes_vs_OVcorrected.pdf")
