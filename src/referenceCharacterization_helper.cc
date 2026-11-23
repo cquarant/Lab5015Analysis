@@ -1,4 +1,7 @@
 #include "interface/referenceCharacterization_helper.h"
+#include "TGraphErrors.h"
+
+#include <memory>
 
 SigmaResult ilTriangoloNo(float sigma12, float sigma23, float sigma13, float sigmaCorr) {
   SigmaResult res;
@@ -217,6 +220,45 @@ TF1* FitAndSaveProfile(TFile* outFile, TProfile* prof, const std::string& plotdi
   }
   delete c;
   return f;
+}
+
+TF1* FitAndSaveTimeWalkProfile(TFile* outFile, TProfile* prof, const std::string& plotdirectory) {
+  // Apply the bin selection to the fit itself. A ROOT range fit would also
+  // include sparse or rejected bins between the two range endpoints.
+  constexpr double minBinEntries = 5.;
+  constexpr double minSingleEventSpreadPs = 30.;
+  const double mean = prof->GetMean(2);
+  const double halfWidth = 2. * prof->GetRMS(2);
+  TGraphErrors points;
+  for (int bin = 1; bin <= prof->GetNbinsX(); ++bin) {
+    const double entries = prof->GetBinEffectiveEntries(bin);
+    const double y = prof->GetBinContent(bin);
+    if (entries < minBinEntries || std::abs(y - mean) > halfWidth)
+      continue;
+    const double error = std::max(prof->GetBinError(bin), minSingleEventSpreadPs / std::sqrt(entries));
+    const int point = points.GetN();
+    points.SetPoint(point, prof->GetBinCenter(bin), y);
+    points.SetPointError(point, 0., error);
+  }
+  if (points.GetN() < 3)
+    return nullptr;
+
+  const double halfBin = 0.5 * prof->GetBinWidth(1);
+  auto fit = std::make_unique<TF1>(Form("f_%s", prof->GetName()), "pol1",
+                                   points.GetPointX(0) - halfBin,
+                                   points.GetPointX(points.GetN() - 1) + halfBin);
+  if (points.Fit(fit.get(), "QRSN") != 0 || !std::isfinite(fit->GetParameter(0)) ||
+      !std::isfinite(fit->GetParameter(1)))
+    return nullptr;
+
+  TCanvas canvas(Form("c_%s", prof->GetName()), prof->GetName(), 600, 500);
+  prof->Draw();
+  fit->Draw("same");
+  canvas.SaveAs(Form("%s/%s.png", plotdirectory.c_str(), canvas.GetName()));
+  outFile->cd();
+  prof->Write();
+  fit->Write();
+  return fit.release();
 }
 
 bool PassSelection(ModuleEventWithRefClass* anEvent, double deltaTL, double deltaTR, double deltaTL_AveRef, double deltaTR_AveRef, std::map<std::string, std::map<int, std::vector<float>*> > ranges, int index1, double energyL, double energyR)

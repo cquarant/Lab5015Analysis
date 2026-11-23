@@ -1,3 +1,4 @@
+// Simona - 2024/09/25
 #include "interface/TOFHIRThresholdZero.h"
 #include "interface/AnalysisUtils.h"
 #include "interface/FitUtils.h"
@@ -59,6 +60,7 @@ int main(int argc, char** argv)
   int REFasic = opts.GetOpt<int>("Channels.REFasic");
   std::string discCalibrationFile = opts.GetOpt<std::string>("Input.discCalibration");
   std::string interCalibrationFile = opts.GetOpt<std::string>("Input.interCalibration");
+  std::cout << "[INFO] intercalib file: " << std::endl;
   std::string interCalibrationFile_ref = opts.GetOpt<std::string>("Input.interCalibration_ref");
   std::vector<unsigned int> channelMapping = opts.GetOpt<std::vector<unsigned int> >("Channels.channelMapping");
   // - Note: the channels corresponding to the external reference bar are directly set in the cfg. The coincidence is required only if it is specified in the cfg

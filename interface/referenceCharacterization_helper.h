@@ -60,6 +60,7 @@ void SaveHisto2ToCanvas(TFile* outFile, TH2* histo, const std::string& plotdirec
 void SaveProfileToCanvas(TFile* outFile, TProfile* prof, const std::string& plotdirectory);
 
 TF1* FitAndSaveHisto(TFile* outFile, TH1F* histo, const std::string& plotdirectory, double nSigmaLow = 1., double nSigmaUp = 1., int saveFlag=1, FitType fitType = kGaussian);
+TF1* FitAndSaveTimeWalkProfile(TFile* outFile, TProfile* prof, const std::string& plotdirectory);
 TF1* FitAndSaveProfile(TFile* outFile, TProfile* prof, const std::string& plotdirectory, int saveFlag=1);
 
 bool PassSelection(ModuleEventWithRefClass* anEvent, double deltaTL, double deltaTR, double deltaTL_AveRef, double deltaTR_AveRef, std::map<std::string, std::map<int, std::vector<float>*> > ranges, int index1, double energyL, double energyR);

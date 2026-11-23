@@ -73,7 +73,8 @@ def plot_TOFHIR_calibration(csv_file):
                 s = subset[subset["side"] == side].sort_values("bar")
                 rms = s["calib"].std()
                 label_plot = f"{side} (RMS={rms:.3f})"
-                plt.plot(s["bar"], s["calib"], marker="o", label=label_plot, color=colors[side])
+                plt.plot(s["bar"].to_numpy(), s["calib"].to_numpy(),
+                         marker="o", label=label_plot, color=colors[side])
             plt.xlabel("Bar")
             plt.ylabel("TOFHIR calibration")
             plt.title(f"Vov={vov}, th={thr}")

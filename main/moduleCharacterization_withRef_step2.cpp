@@ -51,9 +51,10 @@ int main(int argc, char** argv)
     return -1;
   }
 
-  // - fixed range values for visualization ---- to be FIXED, temporary patch
-  float minEnergyRatio = 0.5;
-  float maxEnergyRatio = 1.5;
+  // Cover the observed energy ratios while keeping profile bins 0.02 wide.
+  constexpr double minEnergyRatio = 0.;
+  constexpr double maxEnergyRatio = 4.;
+  constexpr int nEnergyRatioProfileBins = 200;
   int nbins = 400;
   int nbins2d = 100;
   int nbins2d_phase = 70;
@@ -285,7 +286,7 @@ int main(int argc, char** argv)
 	      // --- 0a. DUT time difference
 	      h1_eRatio[index2] = new TH1F(Form("h1_eRatio_%s",labelLR_energyBin.c_str()),";energy_{L}/energy_{R};Events",nbins, minEnergyRatio, maxEnergyRatio);
 	      h1_deltaT_tL_tR[index2] = new TH1F(Form("h1_deltaT_tL_tR_%s",labelLR_energyBin.c_str()),";t_{L} - t_{R}; Events",nbins, minDeltaT, maxDeltaT);
-	      p1_deltaT_tL_tR_vs_eRatio[index2] = new TProfile(Form("p1_deltaT_tL_tR_vs_eRatio_%s",labelLR_energyBin.c_str()),";energy_{L}/energy_{R};t_{L} - t_{R}", nbinsProf, minEnergyRatio, maxEnergyRatio);	      
+	      p1_deltaT_tL_tR_vs_eRatio[index2] = new TProfile(Form("p1_deltaT_tL_tR_vs_eRatio_%s",labelLR_energyBin.c_str()),";energy_{L}/energy_{R};t_{L} - t_{R}", nEnergyRatioProfileBins, minEnergyRatio, maxEnergyRatio);
 	      // --- 0c. DUT phase
 	      h1_phaseL[index2]   = new TH1F(Form("h1_phaseL_%s",     labelLR_energyBin.c_str()), ";phase_{L};Events"  ,nbins, minPhase, maxPhase);
 	      h1_phaseR[index2]   = new TH1F(Form("h1_phaseR_%s",     labelLR_energyBin.c_str()), ";phase_{R};Events"  ,nbins, minPhase, maxPhase);
@@ -358,7 +359,7 @@ int main(int argc, char** argv)
       // -- 0b. DUT time difference
       f_eRatio[index2] = FitAndSaveHisto(outFile, h1_eRatio[index2], plotDir);
       f = FitAndSaveHisto(outFile,h1_deltaT_tL_tR[index2], plotDir);
-      f_LR[index2] = FitAndSaveProfile(outFile, p1_deltaT_tL_tR_vs_eRatio[index2], plotDir);
+      f_LR[index2] = FitAndSaveTimeWalkProfile(outFile, p1_deltaT_tL_tR_vs_eRatio[index2], plotDir);
       // -- 0c. phase
       SaveHistoToCanvas(outFile, h1_phaseL[index2], plotDir);
       SaveHistoToCanvas(outFile, h1_phaseR[index2], plotDir);
@@ -379,8 +380,13 @@ int main(int argc, char** argv)
       // --- 3. get DUT TW
       p1_deltaT_tL_tAveRefCor_vs_eL[index2]->GetYaxis()->SetRangeUser(minT, maxT);
       p1_deltaT_tR_tAveRefCor_vs_eR[index2]->GetYaxis()->SetRangeUser(minT, maxT);
-      f_LAve_eL[index2] = FitAndSaveProfile(outFile, p1_deltaT_tL_tAveRefCor_vs_eL[index2], plotDir);
-      f_RAve_eR[index2]	= FitAndSaveProfile(outFile, p1_deltaT_tR_tAveRefCor_vs_eR[index2], plotDir);
+      f_LAve_eL[index2] = FitAndSaveTimeWalkProfile(outFile, p1_deltaT_tL_tAveRefCor_vs_eL[index2], plotDir);
+      f_RAve_eR[index2]	= FitAndSaveTimeWalkProfile(outFile, p1_deltaT_tR_tAveRefCor_vs_eR[index2], plotDir);
+      if (!f_eRatio[index2] || !f_eL[index2] || !f_eR[index2] ||
+          !f_LR[index2] || !f_LAve_eL[index2] || !f_RAve_eR[index2]) {
+        std::cerr << "Cannot calibrate time walk for " << h1_eL[index2]->GetName() << '\n';
+        return 1;
+      }
     }
   
   // ========================
