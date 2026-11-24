@@ -378,7 +378,8 @@ int main(int argc, char** argv)
 	    std::cout << "NULL f_LAve at index2=" << index2 << std::endl;
 	    continue;
 	  }
-	  if (!f_LAve_eLRef[index2] || !f_eLRef[index2]) continue;
+	  if (!f_LAve_eLRef[index2] || !f_eLRef[index2] ||
+	      !f_RAve_eRRef[index2] || !f_eRRef[index2]) continue;
 	  double eLRefCor    = f_LAve_eLRef[index2] -> Eval( anEvent->energyL_ref ) - f_LAve_eLRef[index2] -> Eval( f_eLRef[index2]->GetParameter(1) );
 	  double eRRefCor    = f_RAve_eRRef[index2] -> Eval( anEvent->energyR_ref ) - f_RAve_eRRef[index2] -> Eval( f_eRRef[index2]->GetParameter(1) );
 	  anEvent->timeL_ref_cor = anEvent->timeL_ref - eLRefCor;

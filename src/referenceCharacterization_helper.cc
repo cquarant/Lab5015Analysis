@@ -1,6 +1,7 @@
 #include "interface/referenceCharacterization_helper.h"
 #include "TGraphErrors.h"
 
+#include <algorithm>
 #include <memory>
 
 SigmaResult ilTriangoloNo(float sigma12, float sigma23, float sigma13, float sigmaCorr) {
@@ -44,7 +45,10 @@ void AutoRangeRMS(TH1F* h, double nSigma)
 {
     double mean = h->GetMean();
     double rms  = h->GetRMS();
-    h->GetXaxis()->SetRangeUser(mean - nSigma*rms, mean + nSigma*rms);
+    auto* axis = h->GetXaxis();
+    // SetRangeUser can include flow bins, which must not seed a peak fit.
+    axis->SetRangeUser(std::max(axis->GetXmin(), mean - nSigma*rms),
+                       std::min(axis->GetXmax(), mean + nSigma*rms));
 }
 
 void SaveHistoToCanvas(TFile* outFile, TH1F* histo, const std::string& plotdirectory) {
@@ -140,7 +144,7 @@ TF1* FitAndSaveHisto(TFile* outFile, TH1F* histo, const std::string& plotdirecto
     xmin = histo->GetXaxis()->GetXmin();
   if (xmax > histo->GetXaxis()->GetXmax())
     xmax = histo->GetXaxis()->GetXmax();
-  if (xmin >= xmax) {
+  if (!(xmin < xmax)) {
     std::cerr << "[SKIP] Bad range: " << histo->GetName() << std::endl;
     return nullptr;
   }

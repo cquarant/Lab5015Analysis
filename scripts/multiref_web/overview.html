@@ -1,0 +1,14 @@
+<section class="split"><div><h2>Does the choice of REF bar change the measured resolution?</h2>
+<p>Each DUT bar has a left and a right timestamp. Their difference measures timing fluctuations without using the REF timestamp. A second approach measures each end against an external crystal. We test whether selecting different external bars changes the agreement between the two approaches.</p>
+<p>Four runs cover 16 DUT bars, six T1 thresholds and eight bars of the DM0348 reference module. The main comparison aligns the time offsets of the eight REF samples and compares their union with REF7 alone.</p>
+<a href="results.html#comparison">Compare the centered union with REF7 →</a></div>
+<div><h2>What the comparison shows</h2>
+<p>For the central DUT bars (4–11) at T1 = 10, the median Gaussian mixed-minus-direct gap in the centered union ranges from −1.64 to −0.07 ps across the four runs. At T1 = 3, run 4281 retains a larger gap with both selections: +13.31 ps with the centered union and +14.42 ps with REF7.</p>
+<p>These point estimates give little support to REF choice alone explaining the discrepancy. The timing methods also differ in their corrections and in how their fitted widths enter the calculation.</p></div></section>
+<section><h2>Read the plot legends</h2><p>Each curve gives a single-bar resolution in ps. The short labels appear in the four-panel REF comparison.</p>
+<div class="scroll"><table><thead><tr><th>Plot legend</th><th>Short label</th><th>How the resolution is obtained</th></tr></thead><tbody>
+<tr><td>Direct ratio/phase correction</td><td>Direct</td><td>Correct tL − tR using the energy ratio and mean clock phase. Divide its width by two.</td></tr>
+<tr><td>Current macro: mixed corrections</td><td>Mixed</td><td>Estimate the DUT mean-time resolution by triangularization. The two end-to-REF residuals use channel corrections, while the L−R term uses the direct correction.</td></tr>
+<tr><td>Difference of corrected channels</td><td>Corrected difference</td><td>Subtract the two consistently corrected end-to-REF residuals. Divide the width of that difference by two.</td></tr>
+<tr><td>CatR formula, corrected channels</td><td>CatR</td><td>Combine the widths of the two corrected end-to-REF residuals and their average. For exact variances, this gives the same resolution as the corrected difference.</td></tr>
+</tbody></table></div><p class="small">Gaussian core uses the fitted peak width. Exact moments use the sample variance and include the tails. The mixed-minus-direct plot subtracts the resolutions in ps. Its lower panel compares this gap between REF selections. <a href="methodology.html">Equations and covariance interpretation</a></p></section>

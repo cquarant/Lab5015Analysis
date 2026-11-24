@@ -168,9 +168,10 @@ int main(int argc, char** argv)
 	rawDir.replace(pos, 4, "raw");
       struct stat t_stat;
       std::string fullPath = Form("%s/%04d/", rawDir.c_str(), run);
-      stat(fullPath.c_str(), &t_stat);
-      struct tm * timeinfo = localtime(&t_stat.st_mtime);
-      std::cout << "Time and date of raw file of run" << run << ": " << asctime(timeinfo);
+      if (stat(fullPath.c_str(), &t_stat) == 0) {
+        struct tm * timeinfo = localtime(&t_stat.st_mtime);
+        std::cout << "Time and date of raw file of run" << run << ": " << asctime(timeinfo);
+      }
     } // end of loop on runs
   } // end of loop on token lines
 
@@ -268,10 +269,12 @@ int main(int argc, char** argv)
   std::map<int,TH1F*> h1_energyLR_ext;
   std::map<int,TCanvas*> c;
   std::map<int,std::vector<float>*> rangesLR;
-  std::map<int,bool> acceptEvent;
+  const Long64_t nEntries = maxEntries > 0 ? std::min<Long64_t>(maxEntries, tree->GetEntries()) : tree->GetEntries();
+  const bool requireCoincidence = opts.GetOpt<std::string>("Coincidence.status") == "yes";
+  std::vector<bool> acceptEvent(requireCoincidence ? nEntries : 0, false);
 
   // - Coincidence pre loop
-  if( !opts.GetOpt<std::string>("Coincidence.status").compare("yes") &&
+  if( requireCoincidence &&
       ( !opts.GetOpt<std::string>("Input.sourceName").compare("Na22SingleBar") ||
 	!opts.GetOpt<std::string>("Input.sourceName").compare("Na22") ||
 	!opts.GetOpt<std::string>("Input.sourceName").compare("TB") ||
@@ -279,13 +282,13 @@ int main(int argc, char** argv)
     {
       float energyL_ext;
       float energyR_ext;
-      int nEntries = tree->GetEntries();
-      if( maxEntries > 0 ) nEntries = maxEntries;
+      // The REF preselection only uses hit indices, threshold, energy and ToT.
+      for (auto branch : {"qfine", "time", "qT1", "t1fine"})
+        tree->SetBranchStatus(branch, 0);
 
       // -- loop on entries 
-      for(int entry = 0; entry < nEntries; ++entry){
+      for(Long64_t entry = 0; entry < nEntries; ++entry){
 	tree -> GetEntry(entry);
-	acceptEvent[entry] = false;
 	if( entry%500000 == 0 ){
 	  std::cout << "\n>>> external bar loop: reading entry " << entry << " / " << nEntries << " (" << 100.*entry/nEntries << "%)" << std::endl;
 	  TrackProcess(cpu, mem, vsz, rss);
@@ -316,6 +319,7 @@ int main(int argc, char** argv)
 	  for(int iBar = 0; iBar < int(channelMapping.size())/2; ++iBar) {
 	    int chL_iext = channelMapping[iBar*2+0] + REFasic*32;
 	    int chR_iext = channelMapping[iBar*2+1] + REFasic*32;
+	    if (channelIdx[chL_iext] < 0 || channelIdx[chR_iext] < 0) continue;
 	    float energyL_iext = (*energy)[channelIdx[chL_iext]];              
 	    float energyR_iext = (*energy)[channelIdx[chR_iext]]; 
 	    float totL_iext    = 0.001*(*tot)[channelIdx[chL_iext]];              
@@ -354,6 +358,8 @@ int main(int argc, char** argv)
 	acceptEvent[entry] = true;
 	h1_energyLR_ext[index] -> Fill(0.5*(energyL_ext + energyR_ext));
       }
+      for (auto branch : {"qfine", "time", "qT1", "t1fine"})
+        tree->SetBranchStatus(branch, 1);
       std::cout << std::endl;
 
       // -- analysis for Na22 source
@@ -433,11 +439,9 @@ int main(int argc, char** argv)
   float energyL[16];
   float energyR[16];
 
-  int nEntries = tree->GetEntries();
-  if( maxEntries > 0 ) nEntries = maxEntries;
-
   // - loop over entries
-  for(int entry = 0; entry < nEntries; ++entry) {
+  for(Long64_t entry = 0; entry < nEntries; ++entry) {
+    if (requireCoincidence && !acceptEvent[entry]) continue;
     tree -> GetEntry(entry);
     if( entry%500000 == 0 )
       {
@@ -466,9 +470,8 @@ int main(int argc, char** argv)
     if (my_step1 > 0  && my_step1 != step1) continue;
     
     // -- check coincidence with another channel 
-    if(!opts.GetOpt<std::string>("Coincidence.status").compare("yes"))
+    if(requireCoincidence)
       {
-	if(!acceptEvent[entry] ) continue;	
 	float energyL_ext = (*energy)[channelIdx[chL_ext]];
 	float energyR_ext = (*energy)[channelIdx[chR_ext]];
 	if (interCalibrationFile_ref != "0")

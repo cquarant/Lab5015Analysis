@@ -101,14 +101,16 @@ def gauss_fit(ROOT, values, name, save=False):
     lo, hi = (-1000., 1000.) if is_diff else (500., 2500.)
     h = ROOT.TH1D(name, name + ";time residual [ps];Events", 400, lo, hi)
     h.SetDirectory(0)
-    vals = np.ascontiguousarray(values, dtype=np.float64)
+    vals = np.asarray(values, dtype=np.float64)
+    vals = np.ascontiguousarray(vals[np.isfinite(vals)])
     h.FillN(len(vals), vals, np.ones(len(vals), dtype=np.float64))
     result = {"sigma": None, "sigma_error": None, "status": -1,
               "entries": len(vals), "underflow": h.GetBinContent(0),
               "overflow": h.GetBinContent(401)}
     if len(vals) >= 10 and h.GetRMS() > 0:
         mean, rms = h.GetMean(), h.GetRMS()
-        h.GetXaxis().SetRangeUser(mean - 5*rms, mean + 5*rms)
+        # ROOT otherwise lets the underflow/overflow bins seed GetMaximumBin.
+        h.GetXaxis().SetRangeUser(max(lo, mean - 5*rms), min(hi, mean + 5*rms))
         peak, rms = h.GetBinCenter(h.GetMaximumBin()), h.GetRMS()
         xmin, xmax = max(lo, peak-rms), min(hi, peak+rms)
         if xmin < xmax:
@@ -160,6 +162,18 @@ def bootstrap(ROOT, values, n_moments, n_fits, seed):
                     summary["resolution_errors_ps"][key] = np.std(np.sqrt(v), ddof=1)
         out[estimator] = summary
     return out
+
+
+def summarize_stage(ROOT, values, stage, label, n_moments, n_fits, seed):
+    fits = {q: gauss_fit(ROOT, values[:, j], f"{stage}_{q}_{label}", save=True)
+            for j, q in enumerate(QUANTITIES)}
+    exact = moments(values)
+    tolerance = 1e-10*max(1., exact["matched_halfdiff"])
+    if abs(exact["closure_ps2"]) > tolerance:
+        raise RuntimeError(f"Variance identity failed in {label}: {exact['closure_ps2']}")
+    return {"moments": exact, "gaussian": gaussian_metrics(fits), "fits": fits,
+        "bootstrap": bootstrap(ROOT, values, n_moments, n_fits, seed),
+        "residual_covariance_ps2": np.cov(values, rowvar=False, ddof=1).tolist()}
 
 
 def read_ranges(f):
@@ -275,6 +289,7 @@ def main():
     parser.add_argument("--seed", type=int, default=20261116)
     parser.add_argument("--min-events", type=int, default=100)
     parser.add_argument("--no-event-tree", action="store_true")
+    parser.add_argument("--skip-unusable", action="store_true", help="Record groups lacking fitted corrections instead of aborting the whole REF sample")
     args = parser.parse_args()
     if args.bootstrap < 0 or args.fit_bootstrap < 0 or args.min_events < 2:
         parser.error("Bootstrap counts must be nonnegative and min-events >= 2")
@@ -315,7 +330,15 @@ def main():
                     (args.threshold is not None and th != args.threshold)):
                     continue
                 label = f"bar{bar:02d}_Vov{vov:.2f}_th{th:02d}_energyBin01"
-                c = load_corrections(corrections, label)
+                try:
+                    c = load_corrections(corrections, label)
+                except RuntimeError as error:
+                    if not args.skip_unusable:
+                        raise
+                    report['skipped'].append(dict(label=label, tree=name, bar=bar, vov=vov, threshold=th,
+                        counts=dict(input=int(tree.GetEntries()), accepted=0), stages={},
+                        reason='unusable corrections: '+str(error)))
+                    continue
                 entries, tw, full, flags = [], [], [], []
                 counts = Counter()
                 for i in range(tree.GetEntries()):
@@ -330,13 +353,11 @@ def main():
                         continue
                     a, b, invalid = corrected_row(e, c)
                     if not np.isfinite(a+b).all():
-                        raise RuntimeError(f"Nonfinite correction in {name}, entry {i}")
+                        counts["nonfinite_correction"] += 1
+                        continue
                     entries.append(i); tw.append(a); full.append(b); flags.append(invalid)
                     counts["accepted"] += 1
                     counts["invalid_phase_bin"] += int(invalid)
-                if len(entries) < args.min_events:
-                    report["skipped"].append({"label": label, "counts": dict(counts), "reason": "too few events"})
-                    continue
                 tw, full = np.asarray(tw), np.asarray(full)
                 group = {"label": label, "tree": name, "bar": bar, "vov": vov, "threshold": th,
                          "counts": dict(counts), "source_entries_sha256": hashlib.sha256(np.array(entries, dtype="<i8").tobytes()).hexdigest(),
@@ -344,16 +365,13 @@ def main():
                 result_file.cd()
                 if not args.no_event_tree:
                     write_events(ROOT, label, entries, tw, full, flags)
+                if len(entries) < args.min_events:
+                    group["reason"] = "too few events"
+                    report["skipped"].append(group)
+                    continue
                 for stage, values in (("tw", tw), ("full", full)):
-                    fits = {q: gauss_fit(ROOT, values[:, j], f"{stage}_{q}_{label}", save=True)
-                            for j, q in enumerate(QUANTITIES)}
-                    exact = moments(values)
-                    tolerance = 1e-10*max(1., exact["matched_halfdiff"])
-                    if abs(exact["closure_ps2"]) > tolerance:
-                        raise RuntimeError(f"Variance identity failed in {label}: {exact['closure_ps2']}")
-                    group["stages"][stage] = {"moments": exact, "gaussian": gaussian_metrics(fits), "fits": fits,
-                        "bootstrap": bootstrap(ROOT, values, args.bootstrap, args.fit_bootstrap, args.seed + bar + 100*th),
-                        "residual_covariance_ps2": np.cov(values, rowvar=False, ddof=1).tolist()}
+                    group["stages"][stage] = summarize_stage(
+                        ROOT, values, stage, label, args.bootstrap, args.fit_bootstrap, args.seed + bar + 100*th)
                 report["groups"].append(group)
                 print(label, "accepted", len(entries), "matched/direct RMS half-diff [ps]",
                       math.sqrt(group["stages"]["full"]["moments"]["matched_halfdiff"]),

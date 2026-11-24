@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <algorithm>
+#include <cmath>
 #include <iterator>
 #include <filesystem>
 #include <limits>
@@ -30,11 +31,19 @@
 #include "TF1.h"
 #include "TCanvas.h"
 #include "TLatex.h"
+#include "TNamed.h"
 #include "TLine.h"
 #include "TRandom3.h"
 #include "TLegend.h"
 #include "TSpectrum.h"
 
+namespace {
+double CorrectedTimeDifference(long long timeL, long long timeR, double timeWalk, double phase = 0.)
+{
+  const double difference = (timeL - timeR) - timeWalk - phase;
+  return std::isfinite(difference) ? difference : std::numeric_limits<double>::quiet_NaN();
+}
+}
 
 // ------ MAIN --------
 // --------------------
@@ -272,7 +281,10 @@ int main(int argc, char** argv)
 	  double deltaTL_AveRef = anEvent->timeL - tAve_ref;
 	  double deltaTR_AveRef = anEvent->timeR - tAve_ref;
 	  bool pass = PassSelection(anEvent, deltaTL, deltaTR, deltaTL_AveRef, deltaTR_AveRef, ranges, index1, anEvent->energyL, anEvent->energyR);
-	  if (pass==false) continue;
+	  if (!pass || !std::isfinite(anEvent->energyL) || !std::isfinite(anEvent->energyR) ||
+	      anEvent->energyR == 0.) continue;
+	  const double energyRatio = anEvent->energyL / anEvent->energyR;
+	  if (!std::isfinite(energyRatio)) continue;
 	  accept[index1][entry] = true;
 	  // =================================
 	  
@@ -322,9 +334,9 @@ int main(int argc, char** argv)
 	  h1_eL[index2] -> Fill( anEvent->energyL );
 	  h1_eR[index2] -> Fill( anEvent->energyR );
 	  // -- 0b. DUT time difference
-	  h1_eRatio[index2] -> Fill(anEvent->energyL/anEvent->energyR);
+	  h1_eRatio[index2] -> Fill(energyRatio);
 	  h1_deltaT_tL_tR[index2] -> Fill(anEvent->timeL - anEvent->timeR);
-	  p1_deltaT_tL_tR_vs_eRatio[index2] -> Fill(anEvent->energyL/anEvent->energyR, anEvent->timeL - anEvent->timeR);
+	  p1_deltaT_tL_tR_vs_eRatio[index2] -> Fill(energyRatio, anEvent->timeL - anEvent->timeR);
 	  // -- 0c. phase
 	  h1_phaseL[index2]   -> Fill( anEvent->t1fineL );
 	  h1_phaseR[index2]   -> Fill( anEvent->t1fineR );
@@ -385,7 +397,12 @@ int main(int argc, char** argv)
       if (!f_eRatio[index2] || !f_eL[index2] || !f_eR[index2] ||
           !f_LR[index2] || !f_LAve_eL[index2] || !f_RAve_eR[index2]) {
         std::cerr << "Cannot calibrate time walk for " << h1_eL[index2]->GetName() << '\n';
-        return 1;
+        if (argc < 3 || std::string(argv[2]) != "--skip-uncalibratable") return 1;
+        // An unsupported DUT/threshold group must not invalidate every other group
+        // in a low-statistics REF sample. Default single-REF behavior is unchanged.
+        const std::string label = std::string(h1_eL[index2]->GetName()).substr(6);
+        TNamed(Form("uncalibratable_%s", label.c_str()),
+               "Insufficient populated profile bins or failed energy/time-walk fit").Write();
       }
     }
   
@@ -433,7 +450,8 @@ int main(int argc, char** argv)
 	  if( !accept[index1][entry] ) continue ;
 	  int energyBinAverage = FindBin(0.5*(anEvent->energyL+anEvent->energyR),ranges["L-R"][index1])+1;
 	  double  index2( 10000000*energyBinAverage+index1 );
-	  if(!f_LAve_eL[index2] || !f_RAve_eR[index2]){
+	  if(!f_LAve_eL[index2] || !f_RAve_eR[index2] || !f_LR[index2] ||
+             !f_eL[index2] || !f_eR[index2] || !f_eRatio[index2]){
 	    accept[index1][entry] = false;
 	    continue;
 	  }	  
@@ -473,7 +491,11 @@ int main(int argc, char** argv)
 	  double deltaTR_eRCor = anEvent->timeR - tAve_ref_cor - eRCor;
 	  // -- apply DUT TW on DUT tDiff
 	  double eRatioCor          = f_LR[index2] -> Eval( anEvent->energyL/anEvent->energyR ) - f_LR[index2] -> Eval( f_eRatio[index2]->GetParameter(1) );
-	  double deltaTLR_eRatioCor = anEvent->timeL - anEvent->timeR - eRatioCor;
+	  const double deltaTLR_eRatioCor = CorrectedTimeDifference(anEvent->timeL, anEvent->timeR, eRatioCor);
+	  if (!std::isfinite(deltaTLR_eRatioCor) || !std::isfinite(deltaTL_eLCor) || !std::isfinite(deltaTR_eRCor)) {
+	    accept[index1][entry] = false;
+	    continue;
+	  }
 	  
 	  // --- fill histograms
 	  // 1. DUT - corrected REF
@@ -600,7 +622,8 @@ int main(int argc, char** argv)
 	  double phaseMeanCor   = p1_deltaT_tL_tR_eRatioCor_vs_phaseMean[index2]->GetBinContent(phaseBinLR) - p1_deltaT_tL_tR_eRatioCor_vs_phaseMean[index2]->GetBinContent(phaseBinLR_offs);
 
 	  // -- DUT time L-R - TW cor - phase cor
-	  double deltaTLR_eRatioCor_phaseMeanCor = anEvent->timeL - anEvent->timeR - eRatioCor - phaseMeanCor;
+	  const double deltaTLR_eRatioCor_phaseMeanCor = CorrectedTimeDifference(
+	      anEvent->timeL, anEvent->timeR, eRatioCor, phaseMeanCor);
 	  
 	  // -- DUT time - REFavg - eRefCor - eCor - phaseCor
 	  double deltaTL_eLCor_phaseLCor = anEvent->timeL - tAve_ref_cor - eLCor - phaseLCor;
@@ -608,6 +631,9 @@ int main(int argc, char** argv)
 
 	  // -- (DUT avg time - DUT avg eCor - DUT avg phaseCor) - (REF avg time - REF avg eCor)
 	  double deltaT_tAve_tAveRefCor_eCor_phaseCor = (0.5* (anEvent->timeL+anEvent->timeR) - 0.5*(eLCor+eRCor)  - 0.5*(phaseLCor+phaseRCor)) - tAve_ref_cor;
+
+	  if (!std::isfinite(deltaTLR_eRatioCor_phaseMeanCor) || !std::isfinite(deltaTL_eLCor_phaseLCor) ||
+	      !std::isfinite(deltaTR_eRCor_phaseRCor) || !std::isfinite(deltaT_tAve_tAveRefCor_eCor_phaseCor)) continue;
 
 	  // -- fill histograms
 	  // 1. apply phase corrections

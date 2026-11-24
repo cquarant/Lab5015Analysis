@@ -102,3 +102,41 @@ A new set of analysis methods has been introduced within the context of the anal
 
 
 
+## Central REF bars in the September 2025 timing analysis
+
+For the selected-REF closure comparison, use
+`bash scripts/resume_multiref_selected.sh` from this directory on lxplus.
+It runs REF bars 4, 5, 7, 8, 9, 10, 11 and 12, retains both REF7 baselines,
+and stores the per-REF and aggregate results in persistent AFS work. See
+`PROGRESS.md` for the validation commands and output locations.
+
+The commands below describe the earlier central-REF production.
+
+From the repository root, use a single-run withRef TB configuration and the rebuilt
+Step 1, refCharacterization and withRef Step 2 executables. For example, for run 4257:
+
+```sh
+python3 scripts/analyze_central_refs.py \
+  /eos/user/c/cquarant/TB_Sept2025_Studies4DN/timing_closure_withref_TOFHIR/4257/withref.cfg \
+  /eos/home-c/cquarant/TB_Sept2025_Studies4DN/timing_closure_central_refs_TOFHIR/4257 \
+  --work-dir /afs/cern.ch/work/c/cquarant/btl_central_refs_20261124/work/4257 --jobs 2
+```
+
+Each directory from `ref04` through `ref12` contains the configuration, ROOT files,
+DUT-bar diagnostics and method comparison plots for that REF bar. The configured
+REF ASIC and channel mapping select both ends of the bar. Energy selection, time
+walk and phase calibration are applied separately to each DUT–REF sample.
+With `--work-dir`, Step 1, the temporary ROOT dictionary and the unpacked diagnostic
+images use that directory. Each final REF directory contains `diagnostics.tar.gz`,
+the corrected ROOT files, the comparison plots and logs. A `complete` file marks
+each finished REF or pooled result.
+
+For each DUT bar, overvoltage and threshold, `pooled/` contains the fits and
+moments of all accepted coincidences with REF 4, 5, 7, 8, 9, 10, 11 and 12.
+The five corrected residuals from each coincidence stay together. Both correction
+stages use the same events. The pooled Gaussian fits use the same histogram ranges
+as the single-REF fits. The moments include the full tails and any time offsets
+between REF bars. An event that satisfies two REF selections contributes two
+DUT–REF coincidences. The bootstrap resamples coincidences with fixed calibrations.
+The per-REF counts are recorded in `pooled/comparison.csv` and the fit status,
+fit ranges and bootstrap results in `pooled/summary.json`.
